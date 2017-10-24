@@ -41,7 +41,13 @@ class PortoSeguroInsur:
                 df = df.dropna(1)
         return df
 
-
+    def reformat_data(self, dataset, labels, num_columns, num_labels):
+        # reshape dataset to have dim (remaining)x(number of features)**2. remaining is set by -1 values in reshape().
+        # dataset = dataset.reshape((-1, num_columns**2)).astype(np.float64)
+        # Map labels/target value to one-hot-encoded frame. None is same as implying newaxis() just replicating array
+        # if num_labels > 2:
+        labels = (np.arange(num_labels) == labels[:, None]).astype(np.float64)
+        return dataset, labels
 
 
 def main():
@@ -55,7 +61,8 @@ def main():
     print(df.shape)
     print(df_test.shape)
     df = porto_seguro_insur.clean_data(df)
-    df_test = porto_seguro_insur.clean_data(df_test, is_train_data=0)
+    df_test = porto_seguro_insur.clean_data(df_test)
+    # df_test = porto_seguro_insur.clean_data(df_test, is_train_data=0)
     print("After dropping NaN")
     print(df.shape)
     print(df_test.shape)
@@ -93,9 +100,23 @@ def main():
 
         graph = tf.Graph()
         with graph.as_default():
-            tf_train = tf.constant(df.loc[:subset_size, (df.columns[(df.columns != 'target') & (df.columns != 'id')])].values)
-            tf_train_labels = tf.constant(df.loc[:subset_size, 'target'].values)
-            tf_test = tf.constant(df_test.values)
+
+            num_labels = np.unique(df.loc[:subset_size, 'target'].values).shape[0]
+            num_columns = df[(df.columns[(df.columns != 'target') & (df.columns != 'id')])].shape[1]
+            # Reformat datasets
+            x_train = df.loc[:subset_size, (df.columns[(df.columns != 'target') & (df.columns != 'id')])].values
+            y_train = df.loc[:subset_size, 'target'].values
+            # We only need to one-hot-encode our labels since otherwise they will not match the dimension of the
+            # logits in our later computation.
+            y_train = porto_seguro_insur.reformat_data(x_train, y_train, num_columns=num_columns,
+                                                       num_labels=num_labels)[1]
+            x_test = df_test.loc[:subset_size, (df_test.columns[(df_test.columns != 'id')])].values
+            # y_test = y_train
+            # x_test = porto_seguro_insur.reformat_data(x_test, y_test, num_columns=num_columns, num_labels=num_labels)[0]
+
+            tf_train = tf.constant(x_train[:subset_size, :])
+            tf_train_labels = tf.constant(y_train[:subset_size])
+            tf_test = tf.constant(x_test[:subset_size, :])
 
             # As in a neural network the goal is to compute the cross-entropy D(S(w,x), L)
             # x, input training data
@@ -123,22 +144,22 @@ def main():
             # This transformation makes it a well conditioned problem.
 
             # Initialize weights on truncated normal distribution. Initialize biases to zero.
-            num_labels = np.unique(df.loc[:subset_size, 'target'].values).shape[0]
-            num_columns = df[(df.columns[(df.columns != 'target') & (df.columns != 'id')])].shape[1]
-            weights = tf.Variable(tf.truncated_normal([num_columns**2, num_labels], dtype=np.float64))
+
+            weights = tf.Variable(tf.truncated_normal([num_columns, num_labels], dtype=np.float64))
             biases = tf.Variable(tf.zeros([num_labels], dtype=np.float64))
 
+
             # Logits and loss function.
-            # logits = tf.matmul(tf_train, weights) + biases
-            # loss_function = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf_train_labels,
-            #                                                                        logits=logits))
+            logits = tf.matmul(tf_train, weights) + biases
+            loss_function = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf_train_labels,
+                                                                                   logits=logits))
 
             # Find minimum of loss function using gradient-descent.
-            # optimized_weights_and_bias =tf.train.GradientDescentOptimizer(0.5).minimize(loss=loss_function)
+            optimized_weights_and_bias = tf.train.GradientDescentOptimizer(0.5).minimize(loss=loss_function)
 
             # Accuracy variables using the initial values for weights and bias of our linear model.
-            # train_prediction = tf.nn.softmax(logits)
-            # test_prediction = tf.nn.softmax(tf.matmul(tf_test, weights) + biases)
+            train_prediction = tf.nn.softmax(logits)
+            test_prediction = tf.nn.softmax(tf.matmul(tf_test, weights) + biases)
 
 
         pass
