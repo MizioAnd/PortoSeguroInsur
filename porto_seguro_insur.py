@@ -11,7 +11,7 @@ import random
 from sklearn.model_selection import cross_val_score
 import tensorflow as tf
 
-class PortoSeguroIsur:
+class PortoSeguroInsur:
     ''' Pandas DataFrame '''
     # For .read_csv, always use header=0 when you know row 0 is the header row
     df = pd.read_csv('../input/train.csv', header=0)
@@ -45,7 +45,7 @@ class PortoSeguroIsur:
 
 
 def main():
-    porto_seguro_insur = PortoSeguroIsur()
+    porto_seguro_insur = PortoSeguroInsur()
     df = porto_seguro_insur.df.copy()
     df_test = porto_seguro_insur.df_test.copy()
 
@@ -78,9 +78,69 @@ def main():
         print('All df set missing values')
         porto_seguro_insur.missing_values_in_dataframe(df)
 
+        print('Uniques')
+        uniques_in_id = np.unique(df.id.values).shape[0]
+        print(uniques_in_id)
+        print('uniques_in_id == df.shape[0]')
+        print(uniques_in_id == df.shape[0])
+
+
     is_prediction = 1
     if is_prediction:
         #Todo: Implement tensorflow
+        # Subset the data to make it run faster
+        subset_size = 10000
+
+        graph = tf.Graph()
+        with graph.as_default():
+            tf_train = tf.constant(df.loc[:subset_size, (df.columns[(df.columns != 'target') & (df.columns != 'id')])].values)
+            tf_train_labels = tf.constant(df.loc[:subset_size, 'target'].values)
+            tf_test = tf.constant(df_test.values)
+
+            # As in a neural network the goal is to compute the cross-entropy D(S(w,x), L)
+            # x, input training data
+            # w_ij, are elements of the weight matrix
+            # L, labels or target values of the training data (classification problem)
+            # S(), is softmax function
+            # Do the Multinomial Logistic Classification
+            # step 1.
+            # Compute y from the linear model y = WX + b, where b is the bias and W is randomly chosen on
+            # Gaussian distribution and bias is set to zero. The result is called the logit.
+            # step 2.
+            # Compute the softmax function S(Y) which gives distribution
+            # step 3.
+            # Compute cross-entropy D(S, L) = - Sum_i L_i*log(S_i)
+            # step 4.
+            # Compute loss L = 1/N * D(S, L)
+            # step 5.
+            # Use gradient-descent to find minimum of loss wrt. w and b by minimizing L(w,b).
+            # Update your weight and bias until minimum of loss function is reached
+            # w_i -> w_i - alpha*delta_w L
+            # b -> b - alpha*delta_b L
+            # OBS. step 5 is faster optimized if you have transformed the data to have zero mean and equal variance
+            # mu(x_i) = 0
+            # sigma(x_i) = sigma(x_j)
+            # This transformation makes it a well conditioned problem.
+
+            # Initialize weights on truncated normal distribution. Initialize biases to zero.
+            num_labels = np.unique(df.loc[:subset_size, 'target'].values).shape[0]
+            num_columns = df[(df.columns[(df.columns != 'target') & (df.columns != 'id')])].shape[1]
+            weights = tf.Variable(tf.truncated_normal([num_columns**2, num_labels], dtype=np.float64))
+            biases = tf.Variable(tf.zeros([num_labels], dtype=np.float64))
+
+            # Logits and loss function.
+            # logits = tf.matmul(tf_train, weights) + biases
+            # loss_function = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf_train_labels,
+            #                                                                        logits=logits))
+
+            # Find minimum of loss function using gradient-descent.
+            # optimized_weights_and_bias =tf.train.GradientDescentOptimizer(0.5).minimize(loss=loss_function)
+
+            # Accuracy variables using the initial values for weights and bias of our linear model.
+            # train_prediction = tf.nn.softmax(logits)
+            # test_prediction = tf.nn.softmax(tf.matmul(tf_test, weights) + biases)
+
+
         pass
 
 
