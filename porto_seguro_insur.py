@@ -49,6 +49,12 @@ class PortoSeguroInsur:
         labels = (np.arange(num_labels) == labels[:, None]).astype(np.float64)
         return dataset, labels
 
+    def accuracy(self, predictions, labels):
+        # Sum the number of cases where the predictions are correct and divide by the number of predictions
+        number_of_correct_predictions = np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1))
+        return 100*number_of_correct_predictions/predictions.shape[0]
+
+
 
 def main():
     porto_seguro_insur = PortoSeguroInsur()
@@ -98,25 +104,29 @@ def main():
         # Subset the data to make it run faster
         subset_size = 10000
 
+        num_labels = np.unique(df.loc[:subset_size, 'target'].values).shape[0]
+        num_columns = df[(df.columns[(df.columns != 'target') & (df.columns != 'id')])].shape[1]
+        # Reformat datasets
+        x_train = df.loc[:subset_size, (df.columns[(df.columns != 'target') & (df.columns != 'id')])].values
+        y_train = df.loc[:subset_size, 'target'].values
+        # We only need to one-hot-encode our labels since otherwise they will not match the dimension of the
+        # logits in our later computation.
+        y_train = porto_seguro_insur.reformat_data(x_train, y_train, num_columns=num_columns,
+                                                   num_labels=num_labels)[1]
+        x_test = df_test.loc[:subset_size, (df_test.columns[(df_test.columns != 'id')])].values
+        # Todo: we need testdata with labels to benchmark test results.
+        # y_test = y_train
+        # x_test = porto_seguro_insur.reformat_data(x_test, y_test, num_columns=num_columns, num_labels=num_labels)[0]
+        # Todo: we need validation data with labels to perform crossvalidation while training and get a better result.
+
+
+        # Tensorflow uses a dataflow graph to represent your computations in terms of dependencies.
         graph = tf.Graph()
         with graph.as_default():
-
-            num_labels = np.unique(df.loc[:subset_size, 'target'].values).shape[0]
-            num_columns = df[(df.columns[(df.columns != 'target') & (df.columns != 'id')])].shape[1]
-            # Reformat datasets
-            x_train = df.loc[:subset_size, (df.columns[(df.columns != 'target') & (df.columns != 'id')])].values
-            y_train = df.loc[:subset_size, 'target'].values
-            # We only need to one-hot-encode our labels since otherwise they will not match the dimension of the
-            # logits in our later computation.
-            y_train = porto_seguro_insur.reformat_data(x_train, y_train, num_columns=num_columns,
-                                                       num_labels=num_labels)[1]
-            x_test = df_test.loc[:subset_size, (df_test.columns[(df_test.columns != 'id')])].values
-            # y_test = y_train
-            # x_test = porto_seguro_insur.reformat_data(x_test, y_test, num_columns=num_columns, num_labels=num_labels)[0]
-
-            tf_train = tf.constant(x_train[:subset_size, :])
-            tf_train_labels = tf.constant(y_train[:subset_size])
-            tf_test = tf.constant(x_test[:subset_size, :])
+            # Load training and test data into constants that are attached to the graph
+            tf_train = tf.constant(x_train)
+            tf_train_labels = tf.constant(y_train)
+            tf_test = tf.constant(x_test)
 
             # As in a neural network the goal is to compute the cross-entropy D(S(w,x), L)
             # x, input training data
@@ -144,10 +154,8 @@ def main():
             # This transformation makes it a well conditioned problem.
 
             # Initialize weights on truncated normal distribution. Initialize biases to zero.
-
             weights = tf.Variable(tf.truncated_normal([num_columns, num_labels], dtype=np.float64))
             biases = tf.Variable(tf.zeros([num_labels], dtype=np.float64))
-
 
             # Logits and loss function.
             logits = tf.matmul(tf_train, weights) + biases
@@ -161,6 +169,19 @@ def main():
             train_prediction = tf.nn.softmax(logits)
             test_prediction = tf.nn.softmax(tf.matmul(tf_test, weights) + biases)
 
+        number_of_iterations = 600
+        # Creating a tensorflow session to effeciently run same computation multiple times using definitions in defined
+        # dataflow graph.
+        with tf.Session(graph=graph) as session:
+            # Ensure that variables are initialized as done in our graph defining the dataflow.
+            tf.global_variables_initializer().run()
+            for ite in range(number_of_iterations):
+                # Compute loss and predictions
+                loss, predictions = session.run([optimized_weights_and_bias, loss_function, train_prediction])[1:3]
+                if (ite % 100 == 0):
+                    print('Loss at iteration %d: %f' % (ite, loss))
+                    print('Training accuracy: %.1f%%' % porto_seguro_insur.accuracy(predictions, y_train))
+            # print('Test accuracy: %.1f%%' % porto_seguro_insur.accuracy(test_prediction.eval(), y_test))
 
         pass
 
