@@ -102,6 +102,11 @@ def main():
     if is_prediction:
         #Todo: Implement tensorflow
         # Subset the data to make it run faster
+        # (595212, 59)
+        # (892816, 58)
+        # After dropping NaN
+        # (124931, 59)
+        # (186567, 58)
         subset_size = 10000
 
         num_labels = np.unique(df.loc[:subset_size, 'target'].values).shape[0]
@@ -111,12 +116,17 @@ def main():
         y_train = df.loc[:subset_size, 'target'].values
         # We only need to one-hot-encode our labels since otherwise they will not match the dimension of the
         # logits in our later computation.
-        y_train = porto_seguro_insur.reformat_data(x_train, y_train, num_columns=num_columns,
-                                                   num_labels=num_labels)[1]
-        x_test = df_test.loc[:subset_size, (df_test.columns[(df_test.columns != 'id')])].values
+        y_train = porto_seguro_insur.reformat_data(x_train, y_train, num_columns=num_columns, num_labels=num_labels)[1]
+
         # Todo: we need testdata with labels to benchmark test results.
-        # y_test = y_train
-        # x_test = porto_seguro_insur.reformat_data(x_test, y_test, num_columns=num_columns, num_labels=num_labels)[0]
+        # Hack. Use subset of training data (not used in training model) as test data, since it has a label/target value
+        # In case there are duplicates in training data it may imply that test results are too good, when using
+        # a subset of training data for test.
+        x_test = df.loc[subset_size:2*subset_size, (df.columns[(df.columns != 'target') & (df.columns != 'id')])].values
+        # x_test = df_test.loc[:subset_size, (df_test.columns[(df_test.columns != 'id')])].values
+        y_test = df.loc[subset_size:2*subset_size, 'target'].values
+        y_test = porto_seguro_insur.reformat_data(x_test, y_test, num_columns=num_columns, num_labels=num_labels)[1]
+
         # Todo: we need validation data with labels to perform crossvalidation while training and get a better result.
 
 
@@ -127,6 +137,7 @@ def main():
             tf_train = tf.constant(x_train)
             tf_train_labels = tf.constant(y_train)
             tf_test = tf.constant(x_test)
+            tf_test_labels = tf.constant(y_test)
 
             # As in a neural network the goal is to compute the cross-entropy D(S(w,x), L)
             # x, input training data
@@ -169,7 +180,7 @@ def main():
             train_prediction = tf.nn.softmax(logits)
             test_prediction = tf.nn.softmax(tf.matmul(tf_test, weights) + biases)
 
-        number_of_iterations = 600
+        number_of_iterations = 900
         # Creating a tensorflow session to effeciently run same computation multiple times using definitions in defined
         # dataflow graph.
         with tf.Session(graph=graph) as session:
@@ -181,7 +192,7 @@ def main():
                 if (ite % 100 == 0):
                     print('Loss at iteration %d: %f' % (ite, loss))
                     print('Training accuracy: %.1f%%' % porto_seguro_insur.accuracy(predictions, y_train))
-            # print('Test accuracy: %.1f%%' % porto_seguro_insur.accuracy(test_prediction.eval(), y_test))
+            print('Test accuracy: %.1f%%' % porto_seguro_insur.accuracy(test_prediction.eval(), y_test))
 
         pass
 
