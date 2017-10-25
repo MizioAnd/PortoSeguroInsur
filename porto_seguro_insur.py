@@ -164,21 +164,34 @@ def main():
             # sigma(x_i) = sigma(x_j)
             # This transformation makes it a well conditioned problem.
 
+            # Make a 2-layer Neural network (count number of layers of adaptive weights) with num_columns nodes
+            # in hidden layer.
             # Initialize weights on truncated normal distribution. Initialize biases to zero.
-            weights = tf.Variable(tf.truncated_normal([num_columns, num_labels], dtype=np.float64))
-            biases = tf.Variable(tf.zeros([num_labels], dtype=np.float64))
+            weights_1_layer = tf.Variable(tf.truncated_normal([num_columns, num_columns], dtype=np.float64))
+            biases_1_layer = tf.Variable(tf.zeros([num_columns], dtype=np.float64))
+            weights_2_layer = tf.Variable(tf.truncated_normal([num_columns, num_labels], dtype=np.float64))
+            biases_2_layer = tf.Variable(tf.zeros([num_labels], dtype=np.float64))
 
             # Logits and loss function.
-            logits = tf.matmul(tf_train, weights) + biases
+            logits_hidden_1_layer = tf.matmul(tf_train, weights_1_layer) + biases_1_layer
+            # Output unit activations of first layer
+            a_1_layer = tf.nn.softmax(logits_hidden_1_layer)
+            logits_2_layer = tf.matmul(a_1_layer, weights_2_layer) + biases_2_layer
             loss_function = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf_train_labels,
-                                                                                   logits=logits))
+                                                                                   logits=logits_2_layer))
 
             # Find minimum of loss function using gradient-descent.
             optimized_weights_and_bias = tf.train.GradientDescentOptimizer(0.5).minimize(loss=loss_function)
 
             # Accuracy variables using the initial values for weights and bias of our linear model.
-            train_prediction = tf.nn.softmax(logits)
-            test_prediction = tf.nn.softmax(tf.matmul(tf_test, weights) + biases)
+            train_prediction = tf.nn.softmax(logits_2_layer)
+            test_prediction = tf.nn.softmax(tf.matmul(tf.nn.softmax(tf.matmul(tf_test, weights_1_layer) +
+                                                                    biases_1_layer), weights_2_layer) + biases_2_layer)
+            # Using Rectifier as activation function. Rectified linear unit (ReLU). Compared to sigmoid or other
+            # activation functions it allows for faster and effective training of neural architectures
+            # train_prediction = tf.nn.relu(logits)
+            # test_prediction = tf.nn.relu(tf.matmul(tf_test, weights) + biases)
+
 
         number_of_iterations = 900
         # Creating a tensorflow session to effeciently run same computation multiple times using definitions in defined
