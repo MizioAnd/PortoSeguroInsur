@@ -54,6 +54,22 @@ class PortoSeguroInsur:
         number_of_correct_predictions = np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1))
         return 100*number_of_correct_predictions/predictions.shape[0]
 
+    def linear_model(self, input_vector, weight_matrix, bias_vector):
+        return tf.matmul(input_vector, weight_matrix) + bias_vector
+
+    def activation_out(self, logit):
+        return self.activation(logit, is_relu=0)
+
+    def activation_hidden(self, logit):
+        return self.activation(logit, is_relu=0)
+
+    def activation(self, logit, is_relu=0):
+        if is_relu:
+            # Using Rectifier as activation function. Rectified linear unit (ReLU). Compared to sigmoid or other
+            # activation functions it allows for faster and effective training of neural architectures.
+            return tf.nn.relu(logit)
+        else:
+            return tf.nn.softmax(logit)
 
 
 def main():
@@ -173,10 +189,10 @@ def main():
             biases_2_layer = tf.Variable(tf.zeros([num_labels], dtype=np.float64))
 
             # Logits and loss function.
-            logits_hidden_1_layer = tf.matmul(tf_train, weights_1_layer) + biases_1_layer
+            logits_hidden_1_layer = porto_seguro_insur.linear_model(tf_train, weights_1_layer, biases_1_layer)
             # Output unit activations of first layer
-            a_1_layer = tf.nn.softmax(logits_hidden_1_layer)
-            logits_2_layer = tf.matmul(a_1_layer, weights_2_layer) + biases_2_layer
+            a_1_layer = porto_seguro_insur.activation_hidden(logits_hidden_1_layer)
+            logits_2_layer = porto_seguro_insur.linear_model(a_1_layer, weights_2_layer, biases_2_layer)
             loss_function = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf_train_labels,
                                                                                    logits=logits_2_layer))
 
@@ -184,14 +200,12 @@ def main():
             optimized_weights_and_bias = tf.train.GradientDescentOptimizer(0.5).minimize(loss=loss_function)
 
             # Accuracy variables using the initial values for weights and bias of our linear model.
-            train_prediction = tf.nn.softmax(logits_2_layer)
-            test_prediction = tf.nn.softmax(tf.matmul(tf.nn.softmax(tf.matmul(tf_test, weights_1_layer) +
-                                                                    biases_1_layer), weights_2_layer) + biases_2_layer)
-            # Using Rectifier as activation function. Rectified linear unit (ReLU). Compared to sigmoid or other
-            # activation functions it allows for faster and effective training of neural architectures
-            # train_prediction = tf.nn.relu(logits)
-            # test_prediction = tf.nn.relu(tf.matmul(tf_test, weights) + biases)
-
+            train_prediction = porto_seguro_insur.activation_out(logits_2_layer)
+            # Applying optimized weights and bias to test data
+            logits_hidden_1_layer_test = porto_seguro_insur.linear_model(tf_test, weights_1_layer, biases_1_layer)
+            a_1_layer_test = porto_seguro_insur.activation_hidden(logits_hidden_1_layer_test)
+            logits_2_layer_test = porto_seguro_insur.linear_model(a_1_layer_test, weights_2_layer, biases_2_layer)
+            test_prediction = porto_seguro_insur.activation_out(logits_2_layer_test)
 
         number_of_iterations = 900
         # Creating a tensorflow session to effeciently run same computation multiple times using definitions in defined
