@@ -55,6 +55,11 @@ class PortoSeguroInsur:
         return 100*number_of_correct_predictions/predictions.shape[0]
 
     def linear_model(self, input_vector, weight_matrix, bias_vector):
+        # f(x) = Wx + b
+        # W is the weight matrix with elements w_ij
+        # x is the input vector
+        # b is the bias vector
+        # In the machine learning literature f(x) is called an activation
         return tf.matmul(input_vector, weight_matrix) + bias_vector
 
     def activation_out(self, logit):
@@ -64,11 +69,14 @@ class PortoSeguroInsur:
         return self.activation(logit, is_relu=0)
 
     def activation(self, logit, is_relu=0):
+        # Also called the activation function
         if is_relu:
             # Using Rectifier as activation function. Rectified linear unit (ReLU). Compared to sigmoid or other
             # activation functions it allows for faster and effective training of neural architectures.
+            # f(x) = max(x,0)
             return tf.nn.relu(logit)
         else:
+            # S(y_i) = e^y_i/(Sum_j e^y_j)
             return tf.nn.softmax(logit)
 
 
