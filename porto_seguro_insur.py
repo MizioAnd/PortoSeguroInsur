@@ -11,8 +11,9 @@ import random
 from sklearn.model_selection import cross_val_score
 import tensorflow as tf
 
+
 class PortoSeguroInsur:
-    ''' Pandas DataFrame '''
+    # Load data into Pandas DataFrame
     # For .read_csv, always use header=0 when you know row 0 is the header row
     df = pd.read_csv('../input/train.csv', header=0)
     df_test = pd.read_csv('../input/test.csv', header=0)
@@ -41,13 +42,11 @@ class PortoSeguroInsur:
                 df = df.dropna(1)
         return df
 
-    def reformat_data(self, dataset, labels, num_columns, num_labels):
-        # reshape dataset to have dim (remaining)x(number of features)**2. remaining is set by -1 values in reshape().
-        # dataset = dataset.reshape((-1, num_columns**2)).astype(np.float64)
+    def reformat_data(self, labels, num_labels):
         # Map labels/target value to one-hot-encoded frame. None is same as implying newaxis() just replicating array
         # if num_labels > 2:
         labels = (np.arange(num_labels) == labels[:, None]).astype(np.float64)
-        return dataset, labels
+        return labels
 
     def accuracy(self, predictions, labels):
         # Sum the number of cases where the predictions are correct and divide by the number of predictions
@@ -97,7 +96,6 @@ def main():
     print(df.shape)
     print(df_test.shape)
 
-
     is_explore_data = 1
     if is_explore_data:
         # Overview of train data
@@ -124,7 +122,6 @@ def main():
 
     is_prediction = 1
     if is_prediction:
-        #Todo: Implement tensorflow
         # Subset the data to make it run faster
         # (595212, 59)
         # (892816, 58)
@@ -140,7 +137,7 @@ def main():
         y_train = df.loc[:subset_size, 'target'].values
         # We only need to one-hot-encode our labels since otherwise they will not match the dimension of the
         # logits in our later computation.
-        y_train = porto_seguro_insur.reformat_data(x_train, y_train, num_columns=num_columns, num_labels=num_labels)[1]
+        y_train = porto_seguro_insur.reformat_data(y_train, num_labels=num_labels)
 
         # Todo: we need testdata with labels to benchmark test results.
         # Hack. Use subset of training data (not used in training model) as test data, since it has a label/target value
@@ -149,10 +146,9 @@ def main():
         x_test = df.loc[subset_size:2*subset_size, (df.columns[(df.columns != 'target') & (df.columns != 'id')])].values
         # x_test = df_test.loc[:subset_size, (df_test.columns[(df_test.columns != 'id')])].values
         y_test = df.loc[subset_size:2*subset_size, 'target'].values
-        y_test = porto_seguro_insur.reformat_data(x_test, y_test, num_columns=num_columns, num_labels=num_labels)[1]
+        y_test = porto_seguro_insur.reformat_data(y_test, num_labels=num_labels)
 
         # Todo: we need validation data with labels to perform crossvalidation while training and get a better result.
-
 
         # Tensorflow uses a dataflow graph to represent your computations in terms of dependencies.
         graph = tf.Graph()
@@ -161,7 +157,7 @@ def main():
             tf_train = tf.constant(x_train)
             tf_train_labels = tf.constant(y_train)
             tf_test = tf.constant(x_test)
-            tf_test_labels = tf.constant(y_test)
+            # tf_test_labels = tf.constant(y_test)
 
             # As in a neural network the goal is to compute the cross-entropy D(S(w,x), L)
             # x, input training data
@@ -224,12 +220,10 @@ def main():
             for ite in range(number_of_iterations):
                 # Compute loss and predictions
                 loss, predictions = session.run([optimized_weights_and_bias, loss_function, train_prediction])[1:3]
-                if (ite % 100 == 0):
+                if ite % 100 == 0:
                     print('Loss at iteration %d: %f' % (ite, loss))
                     print('Training accuracy: %.1f%%' % porto_seguro_insur.accuracy(predictions, y_train))
             print('Test accuracy: %.1f%%' % porto_seguro_insur.accuracy(test_prediction.eval(), y_test))
-
-        pass
 
 
 if __name__ == '__main__':
