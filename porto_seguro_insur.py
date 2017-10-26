@@ -1,7 +1,7 @@
 # porto_seguro_insur.py
 #  Assumes python vers. 3.6
+# __author__ = 'mizio'
 
-__author__ = 'mizio'
 import csv as csv
 import numpy as np
 import pandas as pd
@@ -9,10 +9,17 @@ import pylab as plt
 from fancyimpute import MICE
 import random
 from sklearn.model_selection import cross_val_score
+import datetime
 import tensorflow as tf
 
 
 class PortoSeguroInsur:
+    def __init__(self):
+        self.df = PortoSeguroInsur.df
+        self.df_test = PortoSeguroInsur.df_test
+        self.df_submission = PortoSeguroInsur.df_submission
+        self.timestamp = datetime.datetime.now().strftime('%Y%m%d_%Hh%Mm%Ss')
+
     # Load data into Pandas DataFrame
     # For .read_csv, always use header=0 when you know row 0 is the header row
     df = pd.read_csv('../input/train.csv', header=0)
@@ -95,6 +102,7 @@ def main():
     df = porto_seguro_insur.clean_data(df)
     df_test = porto_seguro_insur.clean_data(df_test)
     # df_test = porto_seguro_insur.clean_data(df_test, is_train_data=0)
+    id_df_test = df_test['id']  # Submission column
     print("After dropping NaN")
     print(df.shape)
     print(df_test.shape)
@@ -152,10 +160,14 @@ def main():
         # Hack. Use subset of training data (not used in training model) as test data, since it has a label/target value
         # In case there are duplicates in training data it may imply that test results are too good, when using
         # a subset of training data for test.
-        x_test = df.loc[subset_size:2*subset_size, (df.columns[(df.columns != 'target') & (df.columns != 'id')])].values
-        # x_test = df_test.loc[:subset_size, (df_test.columns[(df_test.columns != 'id')])].values
-        y_test = df.loc[subset_size:2*subset_size, 'target'].values
-        y_test = porto_seguro_insur.reformat_data(y_test, num_labels=num_labels)
+        # Todo: do cross-validation instead of only one subset testing as below in x_val
+        # Validation data is a subset of training data.
+        x_val = df.loc[subset_size:2*subset_size,
+                 (df.columns[(df.columns != 'target') & (df.columns != 'id')])].values
+        y_val = df.loc[subset_size:2*subset_size, 'target'].values
+        y_val = porto_seguro_insur.reformat_data(y_val, num_labels=num_labels)
+        # Test data.
+        x_test = df_test.loc[:, (df_test.columns[(df_test.columns != 'id')])].values
 
         # Todo: we need validation data with labels to perform crossvalidation while training and get a better result.
 
@@ -165,8 +177,8 @@ def main():
             # Load training and test data into constants that are attached to the graph
             tf_train = tf.constant(x_train)
             tf_train_labels = tf.constant(y_train)
+            tf_val = tf.constant(x_val)
             tf_test = tf.constant(x_test)
-            # tf_test_labels = tf.constant(y_test)
 
             # As in a neural network the goal is to compute the cross-entropy D(S(w,x), L)
             # x, input training data
@@ -214,6 +226,12 @@ def main():
 
             # Accuracy variables using the initial values for weights and bias of our linear model.
             train_prediction = porto_seguro_insur.activation_out(logits_2_layer)
+            # Applying optimized weights and bias to validation data
+            logits_hidden_1_layer_val = porto_seguro_insur.linear_model(tf_val, weights_1_layer, biases_1_layer)
+            a_1_layer_val = porto_seguro_insur.activation_hidden(logits_hidden_1_layer_val)
+            logits_2_layer_val = porto_seguro_insur.linear_model(a_1_layer_val, weights_2_layer, biases_2_layer)
+            val_prediction = porto_seguro_insur.activation_out(logits_2_layer_val)
+
             # Applying optimized weights and bias to test data
             logits_hidden_1_layer_test = porto_seguro_insur.linear_model(tf_test, weights_1_layer, biases_1_layer)
             a_1_layer_test = porto_seguro_insur.activation_hidden(logits_hidden_1_layer_test)
@@ -232,13 +250,17 @@ def main():
                 if ite % 100 == 0:
                     print('Loss at iteration %d: %f' % (ite, loss))
                     print('Training accuracy: %.1f%%' % porto_seguro_insur.accuracy(predictions, y_train))
-            print('Test accuracy: %.1f%%' % porto_seguro_insur.accuracy(test_prediction.eval(), y_test))
+            print('Test accuracy: %.1f%%' % porto_seguro_insur.accuracy(val_prediction.eval(), y_val))
+            output = test_prediction.eval()
 
-        is_make_prediction = 1
-        if is_make_prediction:
-            pass
-
-
+    is_make_prediction = 1
+    if is_make_prediction:
+        ''' Submission '''
+        # Submission requires a csv file with id and target columns.
+        print(np.amin(np.amax(output, 1)))
+        submission = pd.DataFrame({'id': id_df_test, 'target': np.amax(output, 1)})
+        submission.to_csv(''.join(['submission_porto_seguro_insur_', porto_seguro_insur.timestamp, '.csv']), index=False)
+        print(porto_seguro_insur.timestamp)
 
 if __name__ == '__main__':
     main()
