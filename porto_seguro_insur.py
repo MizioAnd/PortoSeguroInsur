@@ -17,6 +17,7 @@ class PortoSeguroInsur:
     # For .read_csv, always use header=0 when you know row 0 is the header row
     df = pd.read_csv('../input/train.csv', header=0)
     df_test = pd.read_csv('../input/test.csv', header=0)
+    df_submission = pd.read_csv('../input/sample_submission.csv', header=0)
 
     @staticmethod
     def features_with_null_logical(df, axis=1):
@@ -83,12 +84,14 @@ def main():
     porto_seguro_insur = PortoSeguroInsur()
     df = porto_seguro_insur.df.copy()
     df_test = porto_seguro_insur.df_test.copy()
+    df_submission = porto_seguro_insur.df_submission.copy()
 
     df = df.replace(-1, np.NaN)
     df_test = df_test.replace(-1, np.NaN)
 
     print(df.shape)
     print(df_test.shape)
+    # Clean data for NaN
     df = porto_seguro_insur.clean_data(df)
     df_test = porto_seguro_insur.clean_data(df_test)
     # df_test = porto_seguro_insur.clean_data(df_test, is_train_data=0)
@@ -119,6 +122,12 @@ def main():
         print('uniques_in_id == df.shape[0]')
         print(uniques_in_id == df.shape[0])
 
+        # Overview of sample_submission format
+        print('\n sample_submission \n')
+        print(df_submission.head(3))
+        print('\n')
+        print(df_submission.info())
+        print('\n')
 
     is_prediction = 1
     if is_prediction:
@@ -224,6 +233,11 @@ def main():
                     print('Loss at iteration %d: %f' % (ite, loss))
                     print('Training accuracy: %.1f%%' % porto_seguro_insur.accuracy(predictions, y_train))
             print('Test accuracy: %.1f%%' % porto_seguro_insur.accuracy(test_prediction.eval(), y_test))
+
+        is_make_prediction = 1
+        if is_make_prediction:
+            pass
+
 
 
 if __name__ == '__main__':
