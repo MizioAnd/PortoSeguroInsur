@@ -301,8 +301,7 @@ def main():
     if is_make_prediction:
         ''' Submission '''
         # Submission requires a csv file with id and target columns.
-        print(np.amin(np.amax(output, 1)))
-        submission = pd.DataFrame({'id': id_df_test, 'target': np.amax(output, 1)})
+        submission = pd.DataFrame({'id': id_df_test, 'target': np.argmax(output, 1)})
         submission.to_csv(''.join(['submission_porto_seguro_insur_', porto_seguro_insur.timestamp, '.csv']), index=False)
         print(porto_seguro_insur.timestamp)
 
