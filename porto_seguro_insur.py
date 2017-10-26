@@ -97,19 +97,24 @@ class PortoSeguroInsur:
         return tf.matmul(input_vector, weight_matrix) + bias_vector
 
     def activation_out(self, logit):
-        return self.activation(logit, is_relu=0)
+        return self.activation(logit, switch_var=0)
 
     def activation_hidden(self, logit):
-        return self.activation(logit, is_relu=0)
+        return self.activation(logit, switch_var=0)
 
-    def activation(self, logit, is_relu=0):
+    def activation(self, logit, switch_var=0):
         # Also called the activation function
-        if is_relu:
+        if switch_var == 0:
+            # Logistic sigmoid function.
+            # sigma(a) = 1/(1+exp(-a))
+            return tf.nn.sigmoid(logit)
+        elif switch_var == 1:
             # Using Rectifier as activation function. Rectified linear unit (ReLU). Compared to sigmoid or other
             # activation functions it allows for faster and effective training of neural architectures.
             # f(x) = max(x,0)
             return tf.nn.relu(logit)
         else:
+            # Softmax function.
             # S(y_i) = e^y_i/(Sum_j e^y_j)
             return tf.nn.softmax(logit)
 
@@ -252,8 +257,13 @@ def main():
             # Output unit activations of first layer
             a_1_layer = porto_seguro_insur.activation_hidden(logits_hidden_1_layer)
             logits_2_layer = porto_seguro_insur.linear_model(a_1_layer, weights_2_layer, biases_2_layer)
-            loss_function = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf_train_labels,
+            switch_var = 0
+            if switch_var == 1:
+                loss_function = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf_train_labels,
                                                                                    logits=logits_2_layer))
+            else:
+                loss_function = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf_train_labels,
+                                                                                       logits=logits_2_layer))
 
             # Find minimum of loss function using gradient-descent.
             optimized_weights_and_bias = tf.train.GradientDescentOptimizer(0.5).minimize(loss=loss_function)
