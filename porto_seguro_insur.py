@@ -201,8 +201,7 @@ def main():
         # a subset of training data for test.
         # Todo: do cross-validation instead of only one subset testing as below in x_val
         # Validation data is a subset of training data.
-        x_val = df.loc[subset_size:2*subset_size,
-                 (df.columns[(df.columns != 'target') & (df.columns != 'id')])].values
+        x_val = df.loc[subset_size:2*subset_size, (df.columns[(df.columns != 'target') & (df.columns != 'id')])].values
         y_val = df_y.loc[subset_size:2*subset_size, 'target'].values
         y_val = porto_seguro_insur.reformat_data(y_val, num_labels=num_labels)
         # Test data.
@@ -247,9 +246,51 @@ def main():
             # Make a 2-layer Neural network (count number of layers of adaptive weights) with num_columns nodes
             # in hidden layer.
             # Initialize weights on truncated normal distribution. Initialize biases to zero.
-            weights_1_layer = tf.Variable(tf.truncated_normal([num_columns, num_columns], dtype=np.float64))
-            biases_1_layer = tf.Variable(tf.zeros([num_columns], dtype=np.float64))
-            weights_2_layer = tf.Variable(tf.truncated_normal([num_columns, num_labels], dtype=np.float64))
+            # For every input vector corresponding to one sample we have D features s.t.
+            # a_j = Sum_i^D w^(1)_ji x_i + w^(1)_j0 , where index j is the number of nodes in the first hidden layer
+            # and it runs j=1,...,M
+            # Vectorizing makes the notation more compact
+            #     | --- x_1 --- |
+            #     | --- x_2 --- |
+            # X = | --- ..  --- |
+            #     | --- x_N --- |
+            # where each x is now a sample vector of dimension (1 x D) and where N is the number of samples.
+            # Similarly, define a tiling of N weight matrices w,
+            #     | --- w --- |
+            #     | --- w --- |
+            # W = | --- ..--- |
+            #     | --- w --- |
+            # where each w is now a matrix of dimension (M x D)
+            # We now form the tensor product between W and X but we need to transpose X as x.T to get (M x D).(D x 1)
+            # multiplication,
+            #       |  w.(x_1.T) |
+            #       |  w.(x_2.T) |
+            # W.X = |  ..        |
+            #       |  w.(x_N.T) |
+            # with W.X having dimensions (M*N x 1).
+            # Additionally, define a tiling of N bias vectors b that each are of dimension (M x 1),
+            #     |  b  |
+            #     |  b  |
+            # B = |  .. |
+            #     |  b  |
+            # with B having dimensions (M*N x 1).
+            # Finally, the activation is a (M*N x 1) vector given as A = W.X + B.
+            # Next, this is passed to an activation function like a simoid and then inserted in second layer of the NN.
+            # Let Z = sigmoid(A)
+            # Let C be the activation of the second layer,
+            # C = W^(2).Z + B^(2)
+            # where W^(2) is the tiling N second layer weight matrices w^(2) each with dimension (K x M). K is the
+            # number of outputs in the classification. The dimension of C is (K x N).
+            # Lastly, apply the sigmoid function to get the predictions
+            # P = sigmoid( C )
+            # which has dimensions (K x N) and is as expected an output vector (K x 1) for every N samples in our
+            # dataset. The output (K x 1)-vector is in a one-hot-encoded form.
+			
+			# Choose number of nodes > than number of features.
+            M_nodes = 2*x_train.shape[1]
+            weights_1_layer = tf.Variable(tf.truncated_normal([num_columns, M_nodes], dtype=np.float64))
+            biases_1_layer = tf.Variable(tf.zeros([M_nodes], dtype=np.float64))
+            weights_2_layer = tf.Variable(tf.truncated_normal([M_nodes, num_labels], dtype=np.float64))
             biases_2_layer = tf.Variable(tf.zeros([num_labels], dtype=np.float64))
 
             # Logits and loss function.
@@ -260,7 +301,7 @@ def main():
             switch_var = 0
             if switch_var == 1:
                 loss_function = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf_train_labels,
-                                                                                   logits=logits_2_layer))
+                                                                                       logits=logits_2_layer))
             else:
                 loss_function = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf_train_labels,
                                                                                        logits=logits_2_layer))
