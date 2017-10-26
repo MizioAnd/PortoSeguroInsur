@@ -20,6 +20,7 @@ class PortoSeguroInsur:
         self.df_submission = PortoSeguroInsur.df_submission
         self.timestamp = datetime.datetime.now().strftime('%Y%m%d_%Hh%Mm%Ss')
 
+
     # Load data into Pandas DataFrame
     # For .read_csv, always use header=0 when you know row 0 is the header row
     df = pd.read_csv('../input/train.csv', header=0)
@@ -40,6 +41,32 @@ class PortoSeguroInsur:
         mask = self.features_with_null_logical(df)
         print(df[mask[mask == 0].index.values].isnull().sum())
         print('\n')
+
+    @staticmethod
+    def extract_numerical_features(df):
+        df = df.copy()
+        df = df.copy()
+        non_numerical_feature_names = df.columns[np.where(PortoSeguroInsur.numerical_feature_logical_incl_hidden_num(
+            df) == 0)]
+        return non_numerical_feature_names
+
+    @staticmethod
+    def extract_non_numerical_features(df):
+        df = df.copy()
+        non_numerical_feature_names = df.columns[np.where(PortoSeguroInsur.numerical_feature_logical_incl_hidden_num(
+            df))]
+        return non_numerical_feature_names
+
+    @staticmethod
+    def numerical_feature_logical_incl_hidden_num(df):
+        logical_of_non_numeric_features = np.zeros(df.columns.shape[0], dtype=int)
+        for ite in np.arange(0, df.columns.shape[0]):
+            try:
+                str(df[df.columns[ite]][0]) + df[df.columns[ite]][0]
+                logical_of_non_numeric_features[ite] = True
+            except TypeError:
+                print('Oops')
+        return logical_of_non_numeric_features
 
     def clean_data(self, df, is_train_data=1):
         df = df.copy()
@@ -100,7 +127,8 @@ def main():
     print(df_test.shape)
     # Clean data for NaN
     df = porto_seguro_insur.clean_data(df)
-    df_test = porto_seguro_insur.clean_data(df_test)
+    df_test = porto_seguro_insur.clean_data(df_test, is_train_data=0)
+    print('df_test.shape: %s' % str(df_test.shape))  # (892816, 46)
     # df_test = porto_seguro_insur.clean_data(df_test, is_train_data=0)
     id_df_test = df_test['id']  # Submission column
     print("After dropping NaN")
@@ -137,6 +165,12 @@ def main():
         print(df_submission.info())
         print('\n')
 
+    is_prepare_data = 1
+    if is_prepare_data:
+        df_test_num_features = porto_seguro_insur.extract_numerical_features(df_test)
+        df_y = df.loc[:, ['target']]
+        df = df.loc[:, df_test_num_features]
+
     is_prediction = 1
     if is_prediction:
         # Subset the data to make it run faster
@@ -147,11 +181,11 @@ def main():
         # (186567, 58)
         subset_size = 10000
 
-        num_labels = np.unique(df.loc[:subset_size, 'target'].values).shape[0]
+        num_labels = np.unique(df_y.loc[:subset_size, 'target'].values).shape[0]
         num_columns = df[(df.columns[(df.columns != 'target') & (df.columns != 'id')])].shape[1]
         # Reformat datasets
         x_train = df.loc[:subset_size, (df.columns[(df.columns != 'target') & (df.columns != 'id')])].values
-        y_train = df.loc[:subset_size, 'target'].values
+        y_train = df_y.loc[:subset_size, 'target'].values
         # We only need to one-hot-encode our labels since otherwise they will not match the dimension of the
         # logits in our later computation.
         y_train = porto_seguro_insur.reformat_data(y_train, num_labels=num_labels)
@@ -164,7 +198,7 @@ def main():
         # Validation data is a subset of training data.
         x_val = df.loc[subset_size:2*subset_size,
                  (df.columns[(df.columns != 'target') & (df.columns != 'id')])].values
-        y_val = df.loc[subset_size:2*subset_size, 'target'].values
+        y_val = df_y.loc[subset_size:2*subset_size, 'target'].values
         y_val = porto_seguro_insur.reformat_data(y_val, num_labels=num_labels)
         # Test data.
         x_test = df_test.loc[:, (df_test.columns[(df_test.columns != 'id')])].values
